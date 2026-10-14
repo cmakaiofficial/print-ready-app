@@ -1,0 +1,1050 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+<title>Cmak — Print-Ready Converter</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<!-- Google AdSense -->
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9832667277256384"
+     crossorigin="anonymous"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script type="module">
+/* =========================================================================
+   FIREBASE BOOTSTRAP
+   Auth (email/password) + Firestore (per-user usage/plan tracking).
+   Everything the plain <script> below needs is exposed on
+   window.CmakFirebase so this stays a single static file.
+   ========================================================================= */
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
+import {
+  getAuth,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js";
+import {
+  getFirestore,
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  increment,
+  serverTimestamp
+} from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBZKrLDSbbJcALCqHi8aeCUtzCL6nyRRdI",
+  authDomain: "print-redy.firebaseapp.com",
+  projectId: "print-redy",
+  storageBucket: "print-redy.firebasestorage.app",
+  messagingSenderId: "346936372336",
+  appId: "1:346936372336:web:bbe7afada01467bda558b5",
+  measurementId: "G-ZCN31042DK"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+// Bridge into the page's plain (non-module) script.
+window.CmakFirebase = {
+  auth, db,
+  doc, getDoc, setDoc, updateDoc, increment, serverTimestamp,
+  createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut
+};
+
+onAuthStateChanged(auth, (user) => {
+  window.dispatchEvent(new CustomEvent('cmak-auth-changed', { detail: { user } }));
+});
+</script>
+<style>
+  :root {
+    --ink: #0d0f12;
+    --panel: #15181d;
+    --panel-2: #1a1e24;
+    --line: #262b33;
+    --paper: #edf0f2;
+    --dim: #9aa1ab;
+    --faint: #666e79;
+    --cyan: #00b4d8;
+    --cyan-dim: #0a3a47;
+    --magenta: #e8368f;
+    --yellow: #f2c14e;
+    --green: #2ecc71;
+    --font-display: 'Space Grotesk', 'Inter', sans-serif;
+    --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: var(--font-body);
+    background: var(--ink);
+    color: var(--paper);
+    padding: 0 0 40px;
+  }
+  .app { max-width: 920px; margin: 0 auto; padding: 0 12px; }
+
+  /* ---------- Color bar (signature motif — a printer's calibration strip) ---------- */
+  .colorbar { display: flex; height: 4px; width: 100%; }
+  .colorbar span { flex: 1; }
+  .colorbar .c { background: var(--cyan); }
+  .colorbar .m { background: var(--magenta); }
+  .colorbar .y { background: var(--yellow); }
+  .colorbar .k { background: var(--paper); }
+
+  /* ---------- Responsive nav ---------- */
+  .topnav {
+    background: var(--panel);
+    position: sticky;
+    top: 0;
+    z-index: 30;
+  }
+  .topnav-inner {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .hamburger {
+    display: none;
+    order: 2;
+    margin-left: auto;
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    width: 38px;
+    height: 34px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    cursor: pointer;
+  }
+  .hamburger span {
+    display: block;
+    width: 18px;
+    height: 2px;
+    background: var(--paper);
+    border-radius: 2px;
+    transition: transform 0.25s ease, opacity 0.25s ease;
+  }
+  .hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+  .hamburger.open span:nth-child(2) { opacity: 0; }
+  .hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+  .nav-links {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    order: 1;
+  }
+  .nav-links a {
+    color: var(--dim);
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 13.5px;
+    white-space: nowrap;
+    transition: color 0.15s ease;
+  }
+  .nav-links a:hover { color: var(--cyan); }
+
+  .auth-area { order: 3; margin-left: auto; }
+
+  @media (max-width: 767px) {
+    .topnav-inner { flex-wrap: wrap; }
+    .hamburger { display: flex; }
+    .auth-area { margin-left: 0; order: 2; }
+    .nav-links {
+      order: 4;
+      flex-direction: column;
+      align-items: flex-start;
+      width: 100%;
+      gap: 0;
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease;
+    }
+    .nav-links.open { max-height: 320px; }
+    .nav-links a {
+      width: 100%;
+      padding: 10px 4px;
+      border-top: 1px solid var(--line);
+    }
+  }
+
+  /* ---------- Brand ---------- */
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand-mark {
+    width: 30px; height: 30px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .brand-mark svg { width: 100%; height: 100%; display: block; }
+  .brand-name {
+    font-family: var(--font-display);
+    font-weight: 700; font-size: 17px; letter-spacing: 0.2px;
+  }
+
+  .auth-area { display: flex; align-items: center; gap: 8px; font-size: 12.5px; flex-wrap: wrap; justify-content: flex-end; }
+  .usage-badge {
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px;
+    padding: 5px 10px; color: var(--dim); white-space: nowrap;
+    font-family: var(--font-mono); font-size: 11.5px; letter-spacing: 0.2px;
+  }
+  .usage-badge.pro { color: var(--green); border-color: #1d3d2b; }
+  .usage-badge.empty { color: var(--yellow); border-color: #4a3d1c; }
+  .btn-ghost {
+    background: transparent; border: 1px solid var(--line); color: var(--paper);
+    border-radius: 7px; padding: 7px 12px; font-size: 13px; font-weight: 500; cursor: pointer;
+    transition: border-color 0.15s ease;
+  }
+  .btn-ghost:hover { border-color: var(--cyan); }
+
+  .hero { padding: 30px 4px 6px; }
+  .eyebrow {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase;
+    color: var(--cyan); margin: 0 0 10px;
+  }
+  h1 {
+    font-family: var(--font-display);
+    font-size: 25px; font-weight: 600; margin: 0 0 8px; letter-spacing: -0.2px;
+  }
+  .hero .subtitle { color: var(--dim); margin: 0; font-size: 13.5px; line-height: 1.6; max-width: 58ch; }
+
+  .grid { display: grid; grid-template-columns: 1fr; gap: 14px; margin-top: 24px; }
+  @media (min-width: 720px) {
+    .grid { grid-template-columns: 1.1fr 0.9fr; gap: 20px; }
+  }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+  @media (min-width: 720px) { .panel { padding: 20px; } }
+  .panel-heading {
+    font-family: var(--font-display); font-size: 15px; font-weight: 600; margin: 0 0 16px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .panel-heading .tag {
+    font-family: var(--font-mono); font-size: 10px; color: var(--faint);
+    border: 1px solid var(--line); border-radius: 4px; padding: 2px 6px; font-weight: 400;
+  }
+  label { display: block; font-size: 12.5px; color: var(--dim); margin-bottom: 14px; font-weight: 500; }
+  input, select, button { font-family: inherit; }
+  input[type="number"], select, input[type="email"], input[type="password"] {
+    display: block; width: 100%; margin-top: 6px;
+    background: var(--ink); color: var(--paper); border: 1px solid var(--line);
+    border-radius: 7px; padding: 10px 8px; font-size: 15px;
+    font-family: var(--font-mono);
+  }
+  select { font-family: var(--font-body); }
+  input:focus, select:focus {
+    outline: none; border-color: var(--cyan);
+    box-shadow: 0 0 0 3px var(--cyan-dim);
+  }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .checkbox-row { display: flex; align-items: center; gap: 8px; margin-top: 20px; }
+  .checkbox-row input { width: auto; margin: 0; accent-color: var(--cyan); }
+  #dropzone {
+    border: 1.5px dashed var(--line); border-radius: 8px; padding: 20px; text-align: center;
+    cursor: pointer; margin-bottom: 16px; color: var(--dim); min-height: 110px;
+    display: flex; align-items: center; justify-content: center; font-size: 13.5px; line-height: 1.5;
+    transition: border-color 0.15s ease;
+  }
+  #dropzone:hover { border-color: var(--cyan); }
+  #dropzone img { max-height: 200px; max-width: 100%; border-radius: 5px; }
+  button#convertBtn {
+    width: 100%; padding: 12px; border: none; border-radius: 7px;
+    background: var(--cyan); color: #04141a; font-size: 14.5px; font-weight: 600; cursor: pointer;
+    letter-spacing: 0.1px; transition: filter 0.15s ease;
+  }
+  button#convertBtn:hover:not(:disabled) { filter: brightness(1.08); }
+  button#convertBtn:disabled { background: #262b33; color: var(--faint); cursor: not-allowed; }
+  .limit-note { font-size: 11.5px; color: var(--faint); margin-top: 8px; text-align: center; font-family: var(--font-mono); }
+  .error { color: #ff7a7a; font-size: 13px; margin-top: 10px; }
+  .muted { color: var(--faint); font-size: 12px; }
+  #canvasWrap { display: flex; justify-content: center; background: var(--ink); border-radius: 7px; padding: 12px; border: 1px solid var(--line); }
+  canvas { max-width: 100%; box-shadow: 0 0 0 1px rgba(255,255,255,0.08); }
+  .report p { font-size: 13px; color: var(--dim); font-family: var(--font-mono); line-height: 1.7; margin: 4px 0; }
+  .warnings {
+    background: #221c0c; border: 1px solid #4a3d1c; border-radius: 7px;
+    padding: 10px 14px; font-size: 12.5px; color: var(--yellow); margin-top: 10px; line-height: 1.5;
+  }
+  .warnings strong { font-family: var(--font-display); font-size: 12px; letter-spacing: 0.3px; }
+  .warnings ul { margin: 8px 0 0; padding-left: 18px; }
+  .download-btn {
+    display: inline-block; margin-top: 12px; padding: 12px 18px;
+    background: var(--green); color: #06180d; font-weight: 600; text-decoration: none;
+    border-radius: 7px; text-align: center; width: 100%; font-size: 14.5px;
+  }
+  footer.pagefoot {
+    text-align: center; color: var(--faint); font-size: 12px; margin-top: 36px;
+    font-family: var(--font-mono);
+  }
+
+  /* ---------- Modals (shared) ---------- */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(6,7,10,0.8);
+    display: flex; align-items: center; justify-content: center;
+    padding: 16px; z-index: 100;
+  }
+  .modal {
+    position: relative;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    width: 100%; max-width: 380px; padding: 24px 22px;
+  }
+  .modal h2 { font-family: var(--font-display); margin: 0 0 4px; font-size: 18px; text-align: center; font-weight: 600; }
+  .modal p.modal-sub { color: var(--dim); font-size: 13px; margin: 0 0 16px; text-align: center; line-height: 1.55; }
+  .modal .error { min-height: 16px; }
+  .btn-primary {
+    width: 100%; padding: 12px; border: none; border-radius: 7px;
+    background: var(--cyan); color: #04141a; font-weight: 600; font-size: 14px; cursor: pointer;
+  }
+  .btn-primary:disabled { background: #34394a; color: var(--faint); cursor: not-allowed; }
+  .btn-secondary {
+    width: 100%; padding: 12px; margin-top: 8px; border: 1px solid var(--line); border-radius: 7px;
+    background: transparent; color: var(--paper); font-weight: 600; font-size: 14px; cursor: pointer;
+  }
+  .btn-pro {
+    background: var(--magenta); color: #2a0716; border: none;
+  }
+  .modal-close {
+    width: 100%; padding: 10px; margin-top: 10px; border: none; background: transparent;
+    color: var(--faint); font-size: 13px; cursor: pointer;
+  }
+  .modal-close-x {
+    position: absolute; top: 14px; right: 16px; background: none; border: none;
+    color: var(--faint); font-size: 18px; cursor: pointer; line-height: 1;
+  }
+  .auth-tabs { display: flex; gap: 6px; margin-bottom: 14px; }
+  .auth-tab {
+    flex: 1; padding: 8px; text-align: center; border-radius: 7px; font-size: 13px; font-weight: 500;
+    border: 1px solid var(--line); color: var(--dim); cursor: pointer; background: transparent;
+  }
+  .auth-tab.active { background: var(--cyan); border-color: var(--cyan); color: #04141a; }
+
+  /* ---------- Rewarded-ad gate modal ---------- */
+  .ad-illustration {
+    width: 60px; height: 60px; margin: 0 auto 14px; border-radius: 12px;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    display: flex; align-items: center; justify-content: center; font-size: 22px; color: var(--cyan);
+  }
+  .ad-gate-buttons { margin-top: 4px; }
+  .ad-loading { text-align: center; padding: 6px 0 2px; }
+  .ad-spinner {
+    width: 32px; height: 32px; margin: 0 auto 12px;
+    border: 3px solid var(--line); border-top-color: var(--cyan); border-radius: 50%;
+    animation: cmak-spin 0.8s linear infinite;
+  }
+  @keyframes cmak-spin { to { transform: rotate(360deg); } }
+  .ad-loading-text { font-size: 13px; color: var(--dim); margin: 0; font-family: var(--font-mono); }
+  .ad-progress-track {
+    width: 100%; height: 4px; background: var(--line); border-radius: 999px; overflow: hidden; margin-top: 10px;
+  }
+  .ad-progress-fill {
+    height: 100%; width: 0%; background: var(--cyan); transition: width 0.2s linear;
+  }
+
+  /* ---------- How it works ---------- */
+  .how-it-works {
+    padding: 56px 4px 8px;
+    border-top: 1px solid var(--line);
+    margin-top: 44px;
+  }
+  .how-it-works .section-heading {
+    font-family: var(--font-display);
+    font-size: 22px;
+    font-weight: 600;
+    text-align: center;
+    margin: 0 0 10px;
+  }
+  .how-it-works .section-sub {
+    text-align: center;
+    color: var(--dim);
+    font-size: 13.5px;
+    line-height: 1.6;
+    max-width: 46ch;
+    margin: 0 auto 34px;
+  }
+  .steps {
+    max-width: 900px;
+    margin: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .step {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 22px;
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+  }
+  .step .mark {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--cyan);
+    border: 1px solid var(--cyan);
+    border-radius: 50%;
+    width: 30px; height: 30px;
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .step h3 {
+    font-family: var(--font-display);
+    font-size: 15.5px; font-weight: 600;
+    color: var(--paper); margin: 0 0 6px;
+  }
+  .step p { color: var(--dim); font-size: 13px; line-height: 1.6; margin: 0; }
+
+  @media (min-width: 768px) {
+    .steps { flex-direction: row; }
+    .step { flex: 1; flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="topnav" id="topnav">
+  <div class="topnav-inner">
+    <div class="brand">
+      <div class="brand-mark">
+        <!-- registration mark — the classic press-alignment symbol -->
+        <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="16" cy="16" r="13" stroke="#00b4d8" stroke-width="2"/>
+          <line x1="16" y1="1" x2="16" y2="10" stroke="#00b4d8" stroke-width="2"/>
+          <line x1="16" y1="22" x2="16" y2="31" stroke="#00b4d8" stroke-width="2"/>
+          <line x1="1" y1="16" x2="10" y2="16" stroke="#00b4d8" stroke-width="2"/>
+          <line x1="22" y1="16" x2="31" y2="16" stroke="#00b4d8" stroke-width="2"/>
+          <circle cx="16" cy="16" r="4" stroke="#00b4d8" stroke-width="2"/>
+        </svg>
+      </div>
+      <div class="brand-name">Cmak</div>
+    </div>
+
+    <button class="hamburger" id="hamburgerBtn" aria-label="Toggle navigation" aria-expanded="false" aria-controls="navLinks">
+      <span></span><span></span><span></span>
+    </button>
+
+    <div class="nav-links" id="navLinks">
+      <a href="index.html">Home</a>
+      <a href="about.html">About</a>
+      <a href="contact.html">Contact</a>
+      <a href="privacy.html">Privacy Policy</a>
+      <a href="terms.html">Terms</a>
+      <a href="faq.html">FAQ</a>
+    </div>
+
+    <div class="auth-area">
+      <span id="usageBadge" class="usage-badge">Sign in to convert</span>
+      <button id="signInTopBtn" class="btn-ghost">Sign in</button>
+      <button id="signOutTopBtn" class="btn-ghost" style="display:none;">Sign out</button>
+    </div>
+  </div>
+  <div class="colorbar"><span class="c"></span><span class="m"></span><span class="y"></span><span class="k"></span></div>
+</nav>
+
+<div class="app">
+  <div class="hero">
+    <p class="eyebrow">Prepress · in your browser</p>
+    <h1>Print-Ready Converter</h1>
+    <p class="subtitle">Upload an image, set your trim size, and export a print-ready PDF with bleed and crop marks. Conversion runs entirely in your browser — nothing is uploaded to a server.</p>
+  </div>
+
+  <div class="grid">
+    <div class="panel">
+      <h2 class="panel-heading">Setup <span class="tag">01</span></h2>
+      <div id="dropzone">Tap to choose an image, or drag &amp; drop one here<br><span class="muted">JPG, PNG, WEBP</span></div>
+      <input id="fileInput" type="file" accept="image/jpeg,image/png,image/webp" hidden />
+
+      <label>Page size
+        <select id="presetSelect">
+          <option value="0">Business Card (89 x 51 mm)</option>
+          <option value="1">A4 Flyer (210 x 297 mm)</option>
+          <option value="2">A5 Flyer (148 x 210 mm)</option>
+          <option value="3">US Letter (215.9 x 279.4 mm)</option>
+          <option value="4">Postcard (152 x 102 mm)</option>
+          <option value="5" selected>Custom</option>
+        </select>
+      </label>
+
+      <div class="row">
+        <label>Trim width (mm)
+          <input id="trimW" type="number" min="1" step="0.1" value="89" />
+        </label>
+        <label>Trim height (mm)
+          <input id="trimH" type="number" min="1" step="0.1" value="51" />
+        </label>
+      </div>
+
+      <div class="row">
+        <label>Bleed (mm)
+          <input id="bleed" type="number" min="0" step="0.5" value="3" />
+        </label>
+        <label>Target DPI
+          <input id="dpi" type="number" min="72" step="10" value="300" />
+        </label>
+      </div>
+
+      <div class="row">
+        <label>Color mode
+          <select id="colorMode">
+            <option value="cmyk">CMYK (for offset print)</option>
+            <option value="rgb">RGB (for digital/proof)</option>
+          </select>
+        </label>
+        <div class="checkbox-row">
+          <input id="cropMarks" type="checkbox" checked />
+          <label for="cropMarks" style="margin:0;">Add crop marks</label>
+        </div>
+      </div>
+
+      <button id="convertBtn" disabled>Convert to print-ready PDF</button>
+      <div id="limitNote" class="limit-note"></div>
+      <div id="errorMsg" class="error" style="display:none;"></div>
+    </div>
+
+    <div class="panel">
+      <h2 class="panel-heading">Preview &amp; result <span class="tag">02</span></h2>
+      <div id="canvasWrap"><canvas id="previewCanvas" width="300" height="200"></canvas></div>
+      <div id="report" class="report" style="margin-top:10px;"></div>
+      <div id="warningsBox"></div>
+      <a id="downloadLink" class="download-btn" style="display:none;" download="print-ready.pdf">Download print-ready PDF</a>
+    </div>
+  </div>
+
+  <section class="how-it-works">
+    <h2 class="section-heading">How Cmak works</h2>
+    <p class="section-sub">A print-ready PDF in three steps, built for a proof, not a guess.</p>
+
+    <div class="steps">
+      <div class="step">
+        <div class="mark">01</div>
+        <div>
+          <h3>Upload your image</h3>
+          <p>Choose a JPG, PNG, or WEBP file. It stays on your device — everything renders locally, nothing is sent to a server.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="mark">02</div>
+        <div>
+          <h3>Set print specs</h3>
+          <p>Dial in trim size, bleed, target DPI, color mode, and crop marks the way you would spec a job for the press.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="mark">03</div>
+        <div>
+          <h3>Download the PDF</h3>
+          <p>Get a print-ready file with accurate bleed and registration-quality crop marks, ready to hand to your printer.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="pagefoot">Cmak · print-ready PDFs, made in your browser.</footer>
+</div>
+
+<!-- ================= Auth modal ================= -->
+<div id="authModal" class="modal-overlay" style="display:none;">
+  <div class="modal">
+    <button class="modal-close-x" id="authCloseX">&times;</button>
+    <h2 id="authHeading">Welcome to Cmak</h2>
+    <p class="modal-sub" id="authSub">Sign in to start converting print-ready PDFs.</p>
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="tabLogin">Sign in</button>
+      <button class="auth-tab" id="tabSignup">Create account</button>
+    </div>
+    <input id="email" type="email" placeholder="Email address" autocomplete="email" />
+    <div style="height:10px;"></div>
+    <input id="password" type="password" placeholder="Password" autocomplete="current-password" />
+    <div id="authError" class="error" style="display:none;"></div>
+    <div style="height:12px;"></div>
+    <button id="authSubmitBtn" class="btn-primary">Sign in</button>
+    <button class="modal-close" id="authCancelBtn">Not now</button>
+  </div>
+</div>
+
+<!-- ================= Rewarded-ad gate modal ================= -->
+<div id="adGateModal" class="modal-overlay" style="display:none;">
+  <div class="modal">
+    <button class="modal-close-x" id="adGateCloseX">&times;</button>
+
+    <div id="adGateIdle">
+      <div class="ad-illustration">▶</div>
+      <h2>You're out of free conversions</h2>
+      <p class="modal-sub">Watch one short ad to unlock another conversion, or go Pro for unlimited, ad-free exports.</p>
+      <div class="ad-gate-buttons">
+        <button id="watchAdBtn" class="btn-primary">Watch Ad to Continue</button>
+        <button id="upgradeProBtn" class="btn-secondary btn-pro">Upgrade to Pro</button>
+      </div>
+    </div>
+
+    <div id="adGateLoading" style="display:none;">
+      <div class="ad-loading">
+        <div class="ad-spinner"></div>
+        <p class="ad-loading-text">Playing rewarded ad… <span id="adCountdown">5</span>s</p>
+        <div class="ad-progress-track"><div id="adProgressFill" class="ad-progress-fill"></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= Upgrade-to-Pro modal ================= -->
+<div id="upgradeModal" class="modal-overlay" style="display:none;">
+  <div class="modal">
+    <button class="modal-close-x" id="upgradeCloseX">&times;</button>
+    <h2>Upgrade to Cmak Pro</h2>
+    <p class="modal-sub">Unlimited conversions, zero ads. Wire this button to Stripe / Play Billing / your payment provider — grant "pro" only after the webhook confirms payment.</p>
+    <button id="confirmUpgradeBtn" class="btn-primary btn-pro">Simulate Pro Upgrade (Demo)</button>
+    <button class="modal-close" id="upgradeCancelBtn">Not now</button>
+  </div>
+</div>
+
+<script>
+/* =========================================================================
+   CONSTANTS
+   ========================================================================= */
+const MM_TO_INCH = 1 / 25.4;
+const PT_PER_INCH = 72;
+const FREE_LIMIT = 5;
+
+const PRESETS = [
+  { w: 89, h: 51 },
+  { w: 210, h: 297 },
+  { w: 148, h: 210 },
+  { w: 215.9, h: 279.4 },
+  { w: 152, h: 102 },
+  { w: '', h: '' }
+];
+
+const mmToPoints = mm => mm * MM_TO_INCH * PT_PER_INCH;
+const mmToPixels = (mm, dpi) => Math.round(mm * MM_TO_INCH * dpi);
+
+/* =========================================================================
+   DOM REFERENCES
+   ========================================================================= */
+let imgEl = null;
+
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+const presetSelect = document.getElementById('presetSelect');
+const trimWInput = document.getElementById('trimW');
+const trimHInput = document.getElementById('trimH');
+const bleedInput = document.getElementById('bleed');
+const dpiInput = document.getElementById('dpi');
+const colorModeSelect = document.getElementById('colorMode');
+const cropMarksInput = document.getElementById('cropMarks');
+const convertBtn = document.getElementById('convertBtn');
+const errorMsg = document.getElementById('errorMsg');
+const canvas = document.getElementById('previewCanvas');
+const reportDiv = document.getElementById('report');
+const warningsBox = document.getElementById('warningsBox');
+const downloadLink = document.getElementById('downloadLink');
+const limitNote = document.getElementById('limitNote');
+const usageBadge = document.getElementById('usageBadge');
+const signInTopBtn = document.getElementById('signInTopBtn');
+const signOutTopBtn = document.getElementById('signOutTopBtn');
+
+/* =========================================================================
+   MODULE: Auth state + Firestore-backed user record
+   { uid, email, plan: 'free' | 'pro', usage, createdAt, lastConversion }
+   ========================================================================= */
+let currentUser = null;
+let userDoc = null;
+
+function fb() { return window.CmakFirebase; }
+
+async function ensureUserDoc(user) {
+  const { db, doc, getDoc, setDoc, serverTimestamp } = fb();
+  const ref = doc(db, 'users', user.uid);
+  const snap = await getDoc(ref);
+  if (snap.exists()) {
+    userDoc = snap.data();
+  } else {
+    userDoc = {
+      email: user.email,
+      plan: 'free',
+      usage: 0,
+      createdAt: serverTimestamp(),
+      lastConversion: null
+    };
+    await setDoc(ref, userDoc);
+  }
+}
+
+async function incrementUsage() {
+  const { db, doc, updateDoc, increment, serverTimestamp } = fb();
+  const ref = doc(db, 'users', currentUser.uid);
+  await updateDoc(ref, { usage: increment(1), lastConversion: serverTimestamp() });
+  userDoc.usage = (userDoc.usage || 0) + 1;
+  updateUsageUI();
+}
+
+async function setUserPlan(plan) {
+  const { db, doc, updateDoc } = fb();
+  const ref = doc(db, 'users', currentUser.uid);
+  await updateDoc(ref, { plan });
+  userDoc.plan = plan;
+  updateUsageUI();
+}
+
+window.addEventListener('cmak-auth-changed', async (e) => {
+  currentUser = e.detail.user;
+  signInTopBtn.style.display = currentUser ? 'none' : 'inline-block';
+  signOutTopBtn.style.display = currentUser ? 'inline-block' : 'none';
+
+  if (currentUser) {
+    try {
+      await ensureUserDoc(currentUser);
+    } catch (err) {
+      console.error('Failed to load user record:', err);
+    }
+  } else {
+    userDoc = null;
+  }
+  updateUsageUI();
+});
+
+function updateUsageUI() {
+  usageBadge.classList.remove('pro', 'empty');
+
+  if (!currentUser) {
+    usageBadge.textContent = 'Sign in to convert';
+    limitNote.textContent = 'Sign in (it\u2019s free) to get 5 free conversions.';
+    return;
+  }
+  if (!userDoc) {
+    usageBadge.textContent = 'Loading…';
+    limitNote.textContent = '';
+    return;
+  }
+  if (userDoc.plan === 'pro') {
+    usageBadge.textContent = 'Pro · Unlimited';
+    usageBadge.classList.add('pro');
+    limitNote.textContent = '';
+    return;
+  }
+
+  const remaining = Math.max(0, FREE_LIMIT - (userDoc.usage || 0));
+  usageBadge.textContent = remaining + ' free conversion' + (remaining === 1 ? '' : 's') + ' left';
+  if (remaining === 0) {
+    usageBadge.classList.add('empty');
+    limitNote.textContent = 'Free limit reached — watch an ad or go Pro to keep converting';
+  } else {
+    limitNote.textContent = `${remaining} of ${FREE_LIMIT} free conversions remaining`;
+  }
+}
+updateUsageUI();
+
+/* =========================================================================
+   MODULE: Auth modal (sign in / sign up)
+   ========================================================================= */
+const authModal = document.getElementById('authModal');
+const authHeading = document.getElementById('authHeading');
+const authSub = document.getElementById('authSub');
+const authSubmitBtn = document.getElementById('authSubmitBtn');
+const authError = document.getElementById('authError');
+const tabLogin = document.getElementById('tabLogin');
+const tabSignup = document.getElementById('tabSignup');
+let authMode = 'login';
+
+function openAuthModal(reason) {
+  authError.style.display = 'none';
+  setAuthMode('login');
+  if (reason === 'limit') {
+    authSub.textContent = `You've used your ${FREE_LIMIT} free conversions. Sign in or create a free account to keep going.`;
+  } else if (reason === 'required') {
+    authSub.textContent = 'Sign in to start converting print-ready PDFs.';
+  } else {
+    authSub.textContent = 'Sign in for unlimited print-ready conversions.';
+  }
+  authModal.style.display = 'flex';
+}
+function closeAuthModal() { authModal.style.display = 'none'; }
+
+function setAuthMode(mode) {
+  authMode = mode;
+  tabLogin.classList.toggle('active', mode === 'login');
+  tabSignup.classList.toggle('active', mode === 'signup');
+  authHeading.textContent = mode === 'login' ? 'Welcome back' : 'Create your account';
+  authSubmitBtn.textContent = mode === 'login' ? 'Sign in' : 'Create account';
+  document.getElementById('password').setAttribute('autocomplete', mode === 'login' ? 'current-password' : 'new-password');
+}
+tabLogin.addEventListener('click', () => setAuthMode('login'));
+tabSignup.addEventListener('click', () => setAuthMode('signup'));
+document.getElementById('authCloseX').addEventListener('click', closeAuthModal);
+document.getElementById('authCancelBtn').addEventListener('click', closeAuthModal);
+signInTopBtn.addEventListener('click', () => openAuthModal('manual'));
+signOutTopBtn.addEventListener('click', () => fb().signOut(fb().auth));
+
+authSubmitBtn.addEventListener('click', async () => {
+  const email = document.getElementById('email').value.trim();
+  const password = document.getElementById('password').value;
+  authError.style.display = 'none';
+  if (!email || !password) {
+    authError.textContent = 'Enter an email and password.';
+    authError.style.display = 'block';
+    return;
+  }
+  authSubmitBtn.disabled = true;
+  try {
+    if (authMode === 'signup') {
+      await fb().createUserWithEmailAndPassword(fb().auth, email, password);
+    } else {
+      await fb().signInWithEmailAndPassword(fb().auth, email, password);
+    }
+    closeAuthModal();
+  } catch (e) {
+    authError.textContent = e.message.replace('Firebase: ', '');
+    authError.style.display = 'block';
+  } finally {
+    authSubmitBtn.disabled = false;
+  }
+});
+
+/* =========================================================================
+   MODULE: Rewarded ad
+   Reusable hook for any rewarded-ad SDK (Google Ad Manager, Adsterra,
+   Monetag, etc). Swap the body of showRewardedAd() for a real SDK call.
+   Contract: resolve `true` only once the viewer watched the ad to
+   completion; resolve `false` if it failed, was skipped, or errored.
+   ========================================================================= */
+async function showRewardedAd() {
+  // ---- Placeholder simulation — replace with a real ad SDK call ----
+  // Example shape for a real integration:
+  //   const result = await AdSdk.loadRewardedAd({ adUnitId: '...' });
+  //   return result.status === 'completed';
+  return new Promise((resolve) => {
+    const totalMs = 5000;
+    const startedAt = Date.now();
+    const countdownEl = document.getElementById('adCountdown');
+    const fillEl = document.getElementById('adProgressFill');
+
+    const tick = () => {
+      const elapsed = Date.now() - startedAt;
+      const remaining = Math.max(0, Math.ceil((totalMs - elapsed) / 1000));
+      countdownEl.textContent = remaining;
+      fillEl.style.width = Math.min(100, (elapsed / totalMs) * 100) + '%';
+      if (elapsed >= totalMs) {
+        clearInterval(intervalId);
+        resolve(true);
+      }
+    };
+    const intervalId = setInterval(tick, 100);
+    tick();
+  });
+}
+
+/* =========================================================================
+   MODULE: Ad-gate modal (shown once the free quota is used up)
+   ========================================================================= */
+const adGateModal = document.getElementById('adGateModal');
+const adGateIdle = document.getElementById('adGateIdle');
+const adGateLoading = document.getElementById('adGateLoading');
+const watchAdBtn = document.getElementById('watchAdBtn');
+const upgradeProBtn = document.getElementById('upgradeProBtn');
+
+function openAdGateModal() {
+  adGateIdle.style.display = 'block';
+  adGateLoading.style.display = 'none';
+  adGateModal.style.display = 'flex';
+}
+function closeAdGateModal() {
+  adGateModal.style.display = 'none';
+}
+document.getElementById('adGateCloseX').addEventListener('click', closeAdGateModal);
+
+watchAdBtn.addEventListener('click', async () => {
+  adGateIdle.style.display = 'none';
+  adGateLoading.style.display = 'block';
+
+  const watched = await showRewardedAd();
+  closeAdGateModal();
+
+  if (watched) {
+    // Reward granted: run exactly one conversion, bypassing the quota check.
+    await runConversion(getParams());
+  } else {
+    showError('The ad was not completed. Please try again to unlock another conversion.');
+  }
+});
+
+upgradeProBtn.addEventListener('click', () => {
+  closeAdGateModal();
+  openUpgradeModal();
+});
+
+/* =========================================================================
+   MODULE: Upgrade-to-Pro modal
+   Demo-only plan switch. In production, only flip `plan` to 'pro' after
+   your payment provider's webhook confirms a successful charge.
+   ========================================================================= */
+const upgradeModal = document.getElementById('upgradeModal');
+function openUpgradeModal() { upgradeModal.style.display = 'flex'; }
+function closeUpgradeModal() { upgradeModal.style.display = 'none'; }
+document.getElementById('upgradeCloseX').addEventListener('click', closeUpgradeModal);
+document.getElementById('upgradeCancelBtn').addEventListener('click', closeUpgradeModal);
+document.getElementById('confirmUpgradeBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('confirmUpgradeBtn');
+  btn.disabled = true;
+  btn.textContent = 'Upgrading…';
+  try {
+    await setUserPlan('pro');
+    closeUpgradeModal();
+  } catch (err) {
+    console.error('Failed to upgrade plan:', err);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Simulate Pro Upgrade (Demo)';
+  }
+});
+
+/* =========================================================================
+   MODULE: File & preview handling (unchanged behavior)
+   ========================================================================= */
+dropzone.addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('dragover', e => e.preventDefault());
+dropzone.addEventListener('drop', e => {
+  e.preventDefault();
+  if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', e => {
+  if (e.target.files[0]) loadFile(e.target.files[0]);
+});
+
+function loadFile(file) {
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    imgEl = img;
+    dropzone.innerHTML = '';
+    dropzone.appendChild(img.cloneNode());
+    convertBtn.disabled = false;
+    downloadLink.style.display = 'none';
+    errorMsg.style.display = 'none';
+    drawPreview();
+  };
+  img.src = url;
+}
+
+presetSelect.addEventListener('change', () => {
+  const p = PRESETS[parseInt(presetSelect.value, 10)];
+  if (p.w !== '') {
+    trimWInput.value = p.w;
+    trimHInput.value = p.h;
+  }
+});
+[trimWInput, trimHInput].forEach(el => el.addEventListener('input', () => {
+  presetSelect.value = '5';
+  drawPreview();
+}));
+[bleedInput, dpiInput, colorModeSelect, cropMarksInput].forEach(el =>
+  el.addEventListener('input', drawPreview)
+);
+
+function getParams() {
+  return {
+    trimWidthMm: parseFloat(trimWInput.value) || 0,
+    trimHeightMm: parseFloat(trimHInput.value) || 0,
+    bleedMm: parseFloat(bleedInput.value) || 0,
+    targetDpi: parseInt(dpiInput.value, 10) || 300,
+    colorMode: colorModeSelect.value,
+    addCropMarks: cropMarksInput.checked
+  };
+}
+
+// On-screen only: canvas can't do true CMYK, this filter just approximates
+// the look so you're not surprised by the final color mode.
+function applyPreviewFilter(ctx, colorMode) {
+  ctx.filter = colorMode === 'cmyk' ? 'saturate(0.82) contrast(1.04) brightness(0.97)' : 'none';
+}
+
+function drawPreview() {
+  const { trimWidthMm, trimHeightMm, bleedMm, targetDpi, colorMode, addCropMarks } = getParams();
+  if (!trimWidthMm || !trimHeightMm) return;
+
+  const outWmm = trimWidthMm + bleedMm * 2;
+  const outHmm = trimHeightMm + bleedMm * 2;
+  const maxPreviewPx = window.innerWidth < 720 ? 300 : 480;
+  const screenScale = Math.min(maxPreviewPx / outWmm, maxPreviewPx / outHmm, 6);
+  const cw = Math.round(outWmm * screenScale);
+  const ch = Math.round(outHmm * screenScale);
+  canvas.width = cw;
+  canvas.height = ch;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, cw, ch);
+
+  const warnings = [];
+
+  if (imgEl) {
+    const scale = Math.max(cw / imgEl.width, ch / imgEl.height);
+    const dw = imgEl.width * scale, dh = imgEl.height * scale;
+    const dx = (cw - dw) / 2, dy = (ch - dh) / 2;
+    applyPreviewFilter(ctx, colorMode);
+    ctx.drawImage(imgEl, dx, dy, dw, dh);
+    ctx.filter = 'none';
+
+    const effDpiW = imgEl.width / (outWmm * MM_TO_INCH);
+    const effDpiH = imgEl.height / (outHmm * MM_TO_INCH);
+    const sourceDpi = Math.round(Math.min(effDpiW, effDpiH));
+
+    if (sourceDpi < targetDpi) {
+      warnings.push(`Source image resolves to about ${sourceDpi} DPI at this size (target ${targetDpi} DPI) — it will be upscaled and may look soft when printed.`);
+    }
+    if (colorMode === 'cmyk') {
+      warnings.push(`Browsers can't do true CMYK separation — this exports as RGB with a CMYK-safe adjustment. For press-critical color, convert with an ICC profile in dedicated prepress software.`);
+    }
+
+    reportDiv.innerHTML = `<p>Output size: ${outWmm.toFixed(1)} × ${outHmm.toFixed(1)} mm (trim ${trimWidthMm} × ${trimHeightMm} mm + ${bleedMm}mm bleed)</p>
+      <p>Estimated source resolution: ~${sourceDpi} DPI (target ${targetDpi})</p>`;
+  } else {
+    ctx.fillStyle = '#c7cbd1';
+    ctx.font = '13px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Upload an image to preview', cw / 2, ch / 2);
+    reportDiv.innerHTML = '';
+  }
+
+  if (addCropMarks) {
+    const bleedPx = bleedMm * screenScale;
+    const mark = 5 * screenScale, gap = 2 * screenScale;
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 1;
+    const left = bleedPx, right = cw - bleedPx, top = bleedPx, bottom = ch - bleedPx;
+    [
+      { x: left, y: top, dx: -1, dy: -1 },
+      { x: right, y: top, dx: 1, dy: -1 },
+      { x: left, y: bottom, dx: -1, dy: 1 },
+      { x: right, y: bottom, dx: 1, dy: 1 }
+    ].forEach(c => {
+      ctx.beginPath();
+      ctx.moveTo(c.x + c.dx * gap, c.y);
+      ctx.lineTo(c.x + c.dx * (gap + mark), c.y);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(c.x, c.y + c.dy * gap);
+      ctx.lineTo(c.x, c.y + c.dy * (gap + mark));
+      ctx.stroke();
+    });
+    ctx.setLineDash([4, 3]);
+    ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+    ctx.strokeRect(left, top, right - left, bottom - top);
+    ctx.setLineDash([]);
+  }
+
+  warningsBox.innerHTML = warnings.length
+    ? `<div class="warnings"><strong>Preflight notes</strong><ul>${warnings.map(w => `<li>${w}</li>`).join('')}</ul></div>`
+    : '';
+}
+
+/* ================
